@@ -5,23 +5,34 @@
   -aesKey / -dc-ip / -target-ip / -port`` options.
 * UBR (Update Build Revision) is read from
   ``HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion!UBR`` over the
-  ``\\winreg`` pipe after nudging RemoteRegistry awake (unauthenticated nudge,
-  same trick NetExec uses).
+  ``\\winreg`` pipe. Opening that pipe trigger-starts RemoteRegistry, so the bind
+  itself is the nudge; a retry loop waits out cold starts instead of a fixed
+  sleep (faster on warm hosts, more robust on slow ones).
 """
 
 from __future__ import annotations
 
 import contextlib
 import socket
+import time
 from dataclasses import dataclass
-from time import sleep
 
 from impacket.dcerpc.v5 import rrp, transport
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 from impacket.nmb import NetBIOSError
 from impacket.smbconnection import SessionError, SMBConnection
 
-_REMOTE_REGISTRY_WAKEUP_SECONDS = 1
+# RemoteRegistry is trigger-started: opening the \winreg pipe asks the SCM to
+# launch it, returning STATUS_PIPE_NOT_AVAILABLE until an instance is ready.
+# We retry the bind within a generous budget so cold/slow starts are handled
+# (the bind's pipe-open is itself the trigger), instead of a fixed sleep.
+_WINREG_BIND_BUDGET = 4.0  # seconds to wait for RemoteRegistry to come up
+_WINREG_BIND_BACKOFF = 0.2  # seconds between bind attempts
+_RETRYABLE_MARKERS = (
+    "STATUS_PIPE_NOT_AVAILABLE",  # service trigger-started, not ready yet
+    "STATUS_PIPE_BUSY",
+    "STATUS_PIPE_NOT_FOUND",
+)
 
 
 class CveDetectError(Exception):
@@ -82,14 +93,14 @@ def connect(address: str, auth: AuthArgs) -> SMBConnection:
     return conn
 
 
-def get_os_version(conn: SMBConnection) -> OsVersion:
+def get_os_version(conn: SMBConnection, detect_dc_flag: bool = True) -> OsVersion:
     return OsVersion(
         os_string=conn.getServerOS() or "",
         major=conn.getServerOSMajor(),
         minor=conn.getServerOSMinor(),
         build=conn.getServerOSBuild(),
         signing_required=_safe_signing_required(conn),
-        is_dc=detect_dc(conn),
+        is_dc=detect_dc(conn) if detect_dc_flag else False,
     )
 
 
@@ -133,48 +144,39 @@ def _port_open(host: str, port: int, timeout: float = 1.0) -> bool:
         return False
 
 
-def trigger_remote_registry(conn: SMBConnection) -> None:
-    """Nudge RemoteRegistry awake by opening \\winreg without admin privs.
-
-    Opening the pipe (and swallowing STATUS_PIPE_NOT_AVAILABLE) is enough to make
-    the service manager start RemoteRegistry on modern Windows. Same trick used by
-    NetExec (credit: splinter_code).
-    """
-    try:
-        tid = conn.connectTree("IPC$")
-    except (SessionError, BrokenPipeError, ConnectionResetError, NetBIOSError, OSError) as e:
-        raise CveDetectError(f"Could not connect to IPC$: {e}") from e
-
-    try:
-        conn.openFile(tid, r"\winreg", 0x12019F, creationOption=0x40, fileAttributes=0x80)
-    except SessionError as e:
-        # STATUS_PIPE_NOT_AVAILABLE is the expected (and useful) error here.
-        if "STATUS_PIPE_NOT_AVAILABLE" not in str(e):
-            raise
-    except (BrokenPipeError, ConnectionResetError, NetBIOSError, OSError):
-        # Best effort; the bind attempt below will surface a real failure.
-        pass
-    sleep(_REMOTE_REGISTRY_WAKEUP_SECONDS)
+def _is_service_starting(err: Exception) -> bool:
+    """True if the error means RemoteRegistry is still coming up (worth retrying)."""
+    msg = str(err)
+    return any(m in msg for m in _RETRYABLE_MARKERS)
 
 
 def read_ubr(conn: SMBConnection, auth: AuthArgs) -> int:
     """Connect to \\winreg, bind RRP, and return the UBR REG_DWORD value.
 
-    Tries the SMB \\winreg pipe first (reusing the existing session). If the pipe
-    is unreachable (e.g. RemoteRegistry disabled and the nudge failed, or SMB pipe
-    access blocked), falls back to ncacn_ip_tcp on the DCE/RPC endpoint mapper.
-    Raises CveDetectError if UBR cannot be determined.
+    The bind opens the \\winreg pipe, which trigger-starts RemoteRegistry and
+    returns STATUS_PIPE_NOT_AVAILABLE until an instance is ready. We retry within
+    a budget so warm hosts resolve on the first attempt and cold starts are waited
+    out — both faster and more robust than a fixed sleep (the previous code gave
+    up after a single 1s sleep and fell through to a TCP path that also needs the
+    service running). If SMB pipe access stays blocked, fall back to ncacn_ip_tcp
+    on the RPC endpoint mapper (135). Raises CveDetectError if UBR cannot be read.
     """
-    try:
-        dce = _open_winreg_smb(conn)
-    except CveDetectError:
-        dce = _open_winreg_tcp(auth)  # may raise CveDetectError
-    try:
-        ubr = _query_ubr(dce)
-    finally:
-        with contextlib.suppress(Exception):
-            dce.disconnect()
-    return ubr
+    deadline = time.monotonic() + _WINREG_BIND_BUDGET
+    while True:
+        try:
+            dce = _open_winreg_smb(conn)
+            break
+        except CveDetectError as e:
+            # Only retry the transient "service starting" states; fail fast on
+            # access-denied / disabled-service / real transport errors.
+            if not _is_service_starting(e) or time.monotonic() >= deadline:
+                dce = _open_winreg_tcp(auth)  # may raise CveDetectError
+                break
+            time.sleep(_WINREG_BIND_BACKOFF)
+
+    # Skip an explicit dce.disconnect() round-trip: conn.logoff() tears down the
+    # underlying SMB transport (and thus the named pipe / RPC context).
+    return _query_ubr(dce)
 
 
 def _open_winreg_smb(conn: SMBConnection):

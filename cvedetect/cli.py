@@ -28,7 +28,6 @@ from .connection import (
     connect,
     get_os_version,
     read_ubr,
-    trigger_remote_registry,
 )
 from .detector import HostInfo, evaluate, host_key
 
@@ -68,11 +67,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Machine-readable JSON output for automation: detected version, signing/DC state, and detected CVEs.",
     )
     parser.add_argument("--list", action="store_true", help="List the CVE database and exit (no connection).")
-    parser.add_argument(
-        "--no-trigger",
-        action="store_true",
-        help="Skip the RemoteRegistry wakeup nudge (assume the service is running).",
-    )
     parser.add_argument("-debug", action="store_true", help="Turn DEBUG output ON")
     parser.add_argument("-ts", action="store_true", help="Add a timestamp to logging output")
 
@@ -210,13 +204,7 @@ def main(argv: list[str] | None = None) -> int:
 
     warnings: list[str] = []
     try:
-        osv = get_os_version(conn)
-
-        if not args.no_trigger:
-            try:
-                trigger_remote_registry(conn)
-            except CveDetectError as e:
-                warnings.append(f"RemoteRegistry wakeup failed: {e}")
+        osv = get_os_version(conn, detect_dc_flag=any(c.dc_only for c in selected))
 
         ubr = None
         try:

@@ -10,6 +10,7 @@ from __future__ import annotations
 import pytest
 
 from cvedetect import cvedb
+from cvedetect.connection import _is_service_starting
 from cvedetect.detector import HostInfo, evaluate, host_key
 from cvedetect.reporter import scan_result
 
@@ -330,3 +331,21 @@ def test_json_tier_null_for_unambiguous_build():
     host = _host(20348, 1, os_string="Windows Server 2022")
     res = _result(host, [cvedb.CVE_BY_ID["cve-2025-55680"]])
     assert res["tier"] is None
+
+
+# --- winreg retry-decision helper ----------------------------------------
+
+
+@pytest.mark.parametrize(
+    "msg, expected",
+    [
+        ("STATUS_PIPE_NOT_AVAILABLE", True),  # RemoteRegistry still starting
+        ("STATUS_PIPE_BUSY", True),
+        ("STATUS_PIPE_NOT_FOUND", True),
+        ("STATUS_ACCESS_DENIED", False),  # real error, fail fast
+        ("STATUS_OBJECT_NAME_NOT_FOUND", False),  # UBR value missing, fail fast
+        ("some transport error", False),
+    ],
+)
+def test_is_service_starting(msg, expected):
+    assert _is_service_starting(RuntimeError(msg)) is expected
