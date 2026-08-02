@@ -11,6 +11,7 @@ import pytest
 
 from cvedetect import cvedb
 from cvedetect.detector import HostInfo, evaluate, host_key
+from cvedetect.reporter import scan_result
 
 
 def _host(build: int, ubr: int | None, os_string="Windows 10", major=10, minor=0, is_dc=False) -> HostInfo:
@@ -254,3 +255,78 @@ def test_signing_message_fields_present():
     assert ghost_spn.signing_message is not None
     # local EoP CVEs have no signing nuance
     assert cvedb.CVE_BY_ID["cve-2026-50343"].signing_message is None
+
+
+# --- JSON scan_result (--json output structure) -------------------------
+
+
+def _result(host, selected, show_exploitation=False):
+    verdicts = [evaluate(c, host) for c in selected]
+    return scan_result(
+        target="t",
+        host=host,
+        verdicts=verdicts,
+        tier=host_key(host)[3],
+        warnings=[],
+        show_exploitation=show_exploitation,
+    )
+
+
+def test_json_includes_detected_cves():
+    host = _host(26100, 32860, os_string="Windows Server 2025", is_dc=True)
+    res = _result(host, [cvedb.CVE_BY_ID["cve-2026-50343"]])
+    assert res["target"] == "t"
+    assert res["version"] == "10.0.26100.32860"
+    assert res["ubr"] == 32860
+    assert res["signing_required"] is False
+    assert res["is_dc"] is True
+    assert res["tier"] == "srv2025"
+    assert res["vulnerable"] is True
+    assert len(res["cves"]) == 1
+    entry = res["cves"][0]
+    assert entry["cve"] == "CVE-2026-50343"
+    assert entry["patched_ubr"] == 33158
+    assert entry["ubr"] == 32860
+    assert entry["dc_only"] is False
+    assert "exploitation" not in entry  # only with -e
+
+
+def test_json_excludes_non_vulnerable():
+    # Fully patched Server 2025 -> no vulnerable CVEs.
+    host = _host(26100, 99999, os_string="Windows Server 2025", is_dc=True)
+    res = _result(host, list(cvedb.CVE_DATABASE))
+    assert res["vulnerable"] is False
+    assert res["cves"] == []
+
+
+def test_json_signing_message_used_when_signing_required():
+    # A vulnerable NTLM-reflection host with signing required reports the
+    # signing-aware message, not the generic one.
+    host = _host(26100, 1, os_string="Windows 11 / Server 2025 Build 26100", is_dc=False)
+    host_signing = HostInfo(
+        major=10,
+        minor=0,
+        build=26100,
+        ubr=1,
+        os_string="Windows 11 / Server 2025 Build 26100",
+        signing_required=True,
+        is_dc=False,
+    )
+    cve = cvedb.CVE_BY_ID["cve-2025-33073"]
+    res_plain = _result(host, [cve])
+    res_signing = _result(host_signing, [cve])
+    assert res_plain["cves"][0]["message"] == cve.message
+    assert res_signing["cves"][0]["message"] == cve.signing_message
+
+
+def test_json_exploitation_url_only_with_flag():
+    host = _host(26100, 32860, os_string="Windows Server 2025", is_dc=True)
+    cve = cvedb.CVE_BY_ID["cve-2026-50343"]
+    assert "exploitation" not in _result(host, [cve])["cves"][0]
+    assert _result(host, [cve], show_exploitation=True)["cves"][0]["exploitation"] == cve.exploitation
+
+
+def test_json_tier_null_for_unambiguous_build():
+    host = _host(20348, 1, os_string="Windows Server 2022")
+    res = _result(host, [cvedb.CVE_BY_ID["cve-2025-55680"]])
+    assert res["tier"] is None

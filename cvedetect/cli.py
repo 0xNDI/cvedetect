@@ -30,7 +30,7 @@ from .connection import (
     read_ubr,
     trigger_remote_registry,
 )
-from .detector import HostInfo, evaluate
+from .detector import HostInfo, evaluate, host_key
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -60,6 +60,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "-e", "--exploitation", action="store_true", help="Also print exploitation references for vulnerable CVEs."
+    )
+    parser.add_argument(
+        "-j",
+        "--json",
+        action="store_true",
+        help="Machine-readable JSON output for automation: detected version, signing/DC state, and detected CVEs.",
     )
     parser.add_argument("--list", action="store_true", help="List the CVE database and exit (no connection).")
     parser.add_argument(
@@ -148,43 +154,61 @@ def resolve_auth(args: argparse.Namespace) -> tuple[str, AuthArgs]:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    json_mode = bool(args.json)
     console = reporter.make_console()
 
-    if args.ts or args.debug:
+    if not json_mode and (args.ts or args.debug):
         from impacket.examples import logger
 
         logger.init(args.ts, args.debug)
 
-    reporter.print_banner(console)
+    if not json_mode:
+        reporter.print_banner(console)
 
     if args.list:
-        reporter.print_cve_list(console, cvedb.CVE_DATABASE)
+        if json_mode:
+            reporter.emit_json(reporter.database_json(cvedb.CVE_DATABASE))
+        else:
+            reporter.print_cve_list(console, cvedb.CVE_DATABASE)
         return 0
 
     if not args.target:
-        console.print("[red]Error: target is required (or use --list).[/]")
-        console.print(f"\n{version.BANNER}")
+        if json_mode:
+            reporter.emit_json({"error": "target is required (or use --list)"})
+        else:
+            console.print("[red]Error: target is required (or use --list).[/]")
+            console.print(f"\n{version.BANNER}")
         return 1
 
     selected, unknown = cvedb.select(args.cve)
-    if unknown:
-        console.print(f"[yellow]Ignoring unknown CVE id(s): {', '.join(unknown)}[/]")
     if not selected:
-        console.print("[red]No known CVEs matched the --cve filter.[/]")
+        if json_mode:
+            reporter.emit_json({"error": "no known CVEs matched the --cve filter", "unknown": unknown})
+        else:
+            if unknown:
+                console.print(f"[yellow]Ignoring unknown CVE id(s): {', '.join(unknown)}[/]")
+            console.print("[red]No known CVEs matched the --cve filter.[/]")
         return 1
 
     try:
         address, auth = resolve_auth(args)
     except ValueError as e:
-        console.print(f"[red]Invalid target: {e}[/]")
+        if json_mode:
+            reporter.emit_json({"target": args.target, "error": f"invalid target: {e}"})
+        else:
+            console.print(f"[red]Invalid target: {e}[/]")
         return 1
 
     try:
         conn = connect(address, auth)
     except CveDetectError as e:
-        console.print(f"[red]{e}[/]")
+        if json_mode:
+            reporter.emit_json({"target": address, "error": str(e)})
+        else:
+            console.print(f"[red]{e}[/]")
         return 2
 
+    warnings: list[str] = []
     try:
         osv = get_os_version(conn)
 
@@ -192,14 +216,13 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 trigger_remote_registry(conn)
             except CveDetectError as e:
-                console.print(f"[yellow]RemoteRegistry wakeup failed: {e}[/]")
+                warnings.append(f"RemoteRegistry wakeup failed: {e}")
 
         ubr = None
         try:
             ubr = read_ubr(conn, auth)
         except CveDetectError as e:
-            console.print(f"[yellow]Could not read UBR: {e}[/]")
-            console.print("[yellow]Falling back to OS-build-only assessment (no UBR).[/]")
+            warnings.append(f"Could not read UBR: {e}")
 
         host = HostInfo(
             major=osv.major,
@@ -210,10 +233,25 @@ def main(argv: list[str] | None = None) -> int:
             signing_required=osv.signing_required,
             is_dc=osv.is_dc,
         )
-        reporter.print_host(console, host)
-
         verdicts = [evaluate(c, host) for c in selected]
-        reporter.print_verdicts(console, verdicts, host, show_exploitation=args.exploitation)
+        tier = host_key(host)[3]
+
+        if json_mode:
+            result = reporter.scan_result(
+                target=address,
+                host=host,
+                verdicts=verdicts,
+                tier=tier,
+                warnings=warnings,
+                show_exploitation=args.exploitation,
+            )
+            reporter.emit_json(result)
+        else:
+            if warnings:
+                for w in warnings:
+                    console.print(f"[yellow]{w}[/]")
+            reporter.print_host(console, host)
+            reporter.print_verdicts(console, verdicts, host, show_exploitation=args.exploitation)
 
         # Exit codes: 0 = scan completed (vulns or not), 3 = nothing decided.
         any_decided = any(v.vulnerable is not None for v in verdicts)
