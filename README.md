@@ -17,10 +17,9 @@ authenticated SMB login, but is only actionable once you hold a low-priv local s
 ## Install
 
 ```bash
-cd /share/Git/cvedetect
-uv tool install .            # installs the `cvedetect` command
+uv tool install git+https://github.com/0xNDI/cvedetect   # installs the `cvedetect` command
 # or run without installing:
-uv run cvedetect --help
+uvx --from git+https://github.com/0xNDI/cvedetect cvedetect --help
 ```
 
 ## Authentication
@@ -45,19 +44,22 @@ cvedetect [[domain/]username[:password]@]<target> [options]
 
 ```bash
 # password
-uv run cvedetect alex.turner:'Checkpoint2024!'@checkpoint.htb
+cvedetect alex.turner:'Checkpoint2024!'@checkpoint.htb
 
 # NetLM/NT hash
-uv run cvedetect -hashes :31d6cfe0d16ae931b73c59d7e0c089c0 user@dc01
+cvedetect -hashes :31d6cfe0d16ae931b73c59d7e0c089c0 user@dc01
 
 # Kerberos
-KRB5CCNAME=/tmp/user.ccache uv run cvedetect -k user@DC01.CORP.LOCAL
+KRB5CCNAME=/tmp/user.ccache cvedetect -k user@DC01.CORP.LOCAL
 
 # filter to specific CVEs and show exploitation refs
-uv run cvedetect -c CVE-2026-50343,CVE-2026-49176 -e user@10.10.10.10
+cvedetect -c CVE-2026-50343,CVE-2026-49176 -e user@10.10.10.10
 
 # list the CVE database without connecting
-uv run cvedetect --list
+cvedetect --list
+
+# machine-readable JSON output for automation
+cvedetect --json user@10.10.10.10
 ```
 
 ## Covered CVEs
@@ -106,6 +108,44 @@ CVE-2026-49176 WalletService link-following EoP    (UBR 32860 < 33158)
 
 `-e/--exploitation` appends the exploitation reference to each line. `--list`
 prints the full reference table (no connection).
+
+### JSON mode
+
+`--json` emits machine-readable JSON (no colors/markup) for automation. It works
+with a target scan or `--list --json` (full CVE database). On errors it emits
+`{"error": ...}` with the appropriate exit code instead of a human message.
+
+```
+$ cvedetect --json checkpoint.htb/alex.turner:'Checkpoint2024!'@checkpoint.htb
+{
+  "target": "checkpoint.htb",
+  "os": "Windows 11 / Server 2025 Build 26100",
+  "major": 10,
+  "minor": 0,
+  "build": 26100,
+  "ubr": 32860,
+  "version": "10.0.26100.32860",
+  "signing_required": true,
+  "is_dc": true,
+  "tier": "server-2025",
+  "vulnerable": true,
+  "warnings": [],
+  "cves": [
+    {
+      "cve": "CVE-2026-54121",
+      "alias": "Certighost",
+      "ubr": 32860,
+      "patched_ubr": 33158,
+      "message": "AD-CS; 26100 keyed Server-2025-only",
+      "dc_only": true,
+      "msrc": "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-54121"
+    }
+  ]
+}
+```
+
+Each CVE entry includes `ubr` (detected) vs `patched_ubr` (the fix threshold);
+add `-e` to also include an `exploitation` field per CVE.
 
 ## Exit codes
 
