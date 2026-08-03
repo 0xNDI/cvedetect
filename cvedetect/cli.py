@@ -27,7 +27,8 @@ from .connection import (
     CveDetectError,
     connect,
     get_os_version,
-    read_ubr,
+    merge_version,
+    read_registry_version,
 )
 from .detector import HostInfo, evaluate, host_key
 
@@ -206,11 +207,26 @@ def main(argv: list[str] | None = None) -> int:
     try:
         osv = get_os_version(conn, detect_dc_flag=any(c.dc_only for c in selected))
 
-        ubr = None
+        # Recover version + UBR from the registry. This is mandatory under
+        # Kerberos, where the SMB negotiate response carries no OS info at all
+        # (impacket parses the version out of the NTLM challenge only).
+        reg = None
         try:
-            ubr = read_ubr(conn, auth)
+            reg = read_registry_version(conn, auth)
         except CveDetectError as e:
-            warnings.append(f"Could not read UBR: {e}")
+            warnings.append(f"Could not read registry/UBR: {e}")
+        if reg is not None:
+            osv = merge_version(osv, reg)
+            if reg.ubr is None:
+                warnings.append("Could not read UBR (value missing in registry)")
+        ubr = reg.ubr if reg is not None else None
+
+        if osv.build is None:
+            raise CveDetectError(
+                "Could not determine the OS build: the SMB negotiate response carried "
+                "no version (typical for Kerberos auth) and RemoteRegistry could not "
+                "be read to recover it."
+            )
 
         host = HostInfo(
             major=osv.major,
