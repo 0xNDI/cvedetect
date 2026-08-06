@@ -78,6 +78,8 @@ component is present.
 | CVE-2025-53779 | BadSuccessor     | DC-only                                   |
 | CVE-2024-49019 | ESC15 / EKUwu    | AD-CS                                     |
 | CVE-2026-54121 | Certighost       | AD-CS; 26100 keyed Server-2025-only       |
+| CVE-2026-25177 | KerberLoss       | DC-only; Kerberos downgrade / takeover    |
+| CVE-2026-27912 | ResetNightmare   | DC-only; Kerberos UPN confusion takeover  |
 
 **Local Elevation-of-Privilege** (CVSS 7.8, `AV:L/PR:L`):
 

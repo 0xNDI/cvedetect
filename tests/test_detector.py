@@ -40,6 +40,8 @@ def test_all_cves_present():
         "CVE-2025-53779",
         "CVE-2024-49019",
         "CVE-2026-54121",
+        "CVE-2026-25177",
+        "CVE-2026-27912",
         # local EoP set
         "CVE-2025-55680",
         "CVE-2026-42980",
@@ -70,6 +72,22 @@ def test_all_cves_present():
         ("CVE-2026-49176", (10, 0, 14393, None), 9339),
         ("CVE-2026-49176", (10, 0, 26100, "srv2025"), 33158),
         ("CVE-2026-49176", (10, 0, 28000, "arm"), 2525),
+        # Apr 2026 (CVE-2026-27912, ResetNightmare) — DC-only, server-only
+        ("CVE-2026-27912", (6, 2, 9200, None), 26026),  # Server 2012
+        ("CVE-2026-27912", (6, 3, 9600, None), 23132),  # Server 2012 R2
+        ("CVE-2026-27912", (10, 0, 14393, None), 9060),  # Server 2016
+        ("CVE-2026-27912", (10, 0, 17763, None), 8644),  # Server 2019
+        ("CVE-2026-27912", (10, 0, 20348, None), 5020),  # Server 2022
+        ("CVE-2026-27912", (10, 0, 25398, None), 2274),  # Server 2022 23H2
+        ("CVE-2026-27912", (10, 0, 26100, "srv2025"), 32690),  # Server 2025
+        # Mar 2026 (CVE-2026-25177, KerberLoss) — DC-only, server-only
+        ("CVE-2026-25177", (6, 2, 9200, None), 25973),  # Server 2012
+        ("CVE-2026-25177", (6, 3, 9600, None), 23074),  # Server 2012 R2
+        ("CVE-2026-25177", (10, 0, 14393, None), 8957),  # Server 2016
+        ("CVE-2026-25177", (10, 0, 17763, None), 8511),  # Server 2019
+        ("CVE-2026-25177", (10, 0, 20348, None), 4830),  # Server 2022
+        ("CVE-2026-25177", (10, 0, 25398, None), 2207),  # Server 2022 23H2
+        ("CVE-2026-25177", (10, 0, 26100, "srv2025"), 32463),  # Server 2025
     ],
 )
 def test_threshold_values(cve_id, key, expected):
@@ -180,7 +198,7 @@ def test_26100_disambiguation_makes_the_difference():
 
 def test_select_all():
     selected, unknown = cvedb.select(None)
-    assert len(selected) == 10
+    assert len(selected) == 12
     assert unknown == []
 
 
@@ -210,6 +228,100 @@ def test_dc_only_cve_checked_on_dc():
     host = _host(26100, 1, os_string="Windows Server 2025", is_dc=True)
     v = evaluate(cvedb.CVE_BY_ID["cve-2025-53779"], host)
     assert v.vulnerable is True  # UBR 1 < 4851, and it is a DC
+
+
+# --- ResetNightmare (CVE-2026-27912): DC-only, server-only ----------------
+
+
+def test_resetnightmare_skipped_on_non_dc():
+    # DC-only: a non-DC Server 2025 is out of scope regardless of UBR.
+    cve = cvedb.CVE_BY_ID["cve-2026-27912"]
+    host = _host(26100, 1, os_string="Windows Server 2025", is_dc=False)
+    assert evaluate(cve, host).vulnerable is None
+
+
+def test_resetnightmare_vulnerable_on_unpatched_dc():
+    cve = cvedb.CVE_BY_ID["cve-2026-27912"]
+    host = _host(26100, 32000, os_string="Windows Server 2025", is_dc=True)
+    v = evaluate(cve, host)
+    assert v.vulnerable is True  # 32000 < 32690
+    assert v.threshold == 32690
+
+
+def test_resetnightmare_patched_on_dc_at_threshold():
+    cve = cvedb.CVE_BY_ID["cve-2026-27912"]
+    host = _host(26100, 32690, os_string="Windows Server 2025", is_dc=True)
+    assert evaluate(cve, host).vulnerable is False  # patched at equality
+
+
+def test_resetnightmare_client_out_of_scope_on_26100():
+    # 26100 is keyed srv2025 only; a Win11 24H2 client is never in scope (and is
+    # also gated out by dc_only). Either way it must be inconclusive.
+    cve = cvedb.CVE_BY_ID["cve-2026-27912"]
+    assert cve.threshold((10, 0, 26100, "client")) is None
+
+
+def test_resetnightmare_affects_legacy_servers():
+    # Server 2012 / 2012 R2 / 2016 / 2019 are in scope on a DC.
+    cve = cvedb.CVE_BY_ID["cve-2026-27912"]
+    # (major, minor, build, ubr, threshold)
+    cases = [
+        (6, 2, 9200, 26025, 26026),   # Server 2012
+        (6, 3, 9600, 23131, 23132),   # Server 2012 R2
+        (10, 0, 14393, 9059, 9060),   # Server 2016
+        (10, 0, 17763, 8643, 8644),   # Server 2019
+    ]
+    for major, minor, build, ubr, thresh in cases:
+        host = _host(build, ubr, os_string="Windows Server", major=major, minor=minor, is_dc=True)
+        v = evaluate(cve, host)
+        assert v.vulnerable is True, (build, ubr)
+        assert v.threshold == thresh, (build, thresh)
+
+
+# --- KerberLoss (CVE-2026-25177): DC-only, server-only --------------------
+
+
+def test_kerberloss_skipped_on_non_dc():
+    cve = cvedb.CVE_BY_ID["cve-2026-25177"]
+    host = _host(26100, 1, os_string="Windows Server 2025", is_dc=False)
+    assert evaluate(cve, host).vulnerable is None
+
+
+def test_kerberloss_vulnerable_on_unpatched_dc():
+    cve = cvedb.CVE_BY_ID["cve-2026-25177"]
+    host = _host(26100, 32000, os_string="Windows Server 2025", is_dc=True)
+    v = evaluate(cve, host)
+    assert v.vulnerable is True  # 32000 < 32463
+    assert v.threshold == 32463
+
+
+def test_kerberloss_patched_on_dc_at_threshold():
+    cve = cvedb.CVE_BY_ID["cve-2026-25177"]
+    host = _host(26100, 32463, os_string="Windows Server 2025", is_dc=True)
+    assert evaluate(cve, host).vulnerable is False
+
+
+def test_kerberloss_client_out_of_scope_on_26100():
+    # 26100 is keyed srv2025 only; a Win11 24H2 client is never in scope.
+    cve = cvedb.CVE_BY_ID["cve-2026-25177"]
+    assert cve.threshold((10, 0, 26100, "client")) is None
+
+
+def test_kerberloss_affects_legacy_servers():
+    # Server 2012 / 2012 R2 / 2016 / 2019 are in scope on a DC.
+    cve = cvedb.CVE_BY_ID["cve-2026-25177"]
+    # (major, minor, build, ubr, threshold)
+    cases = [
+        (6, 2, 9200, 25972, 25973),   # Server 2012
+        (6, 3, 9600, 23073, 23074),   # Server 2012 R2
+        (10, 0, 14393, 8956, 8957),   # Server 2016
+        (10, 0, 17763, 8510, 8511),   # Server 2019
+    ]
+    for major, minor, build, ubr, thresh in cases:
+        host = _host(build, ubr, os_string="Windows Server", major=major, minor=minor, is_dc=True)
+        v = evaluate(cve, host)
+        assert v.vulnerable is True, (build, ubr)
+        assert v.threshold == thresh, (build, thresh)
 
 
 def test_non_dc_cve_not_gated_by_dc():

@@ -211,3 +211,55 @@ CVE = {
     # no dc_only / no signing_message for these local-EoP CVEs
 }
 ```
+
+---
+
+## 6. DC-only domain-takeover CVEs (KerberLoss, ResetNightmare)
+
+Both come from the same Semperis "Identity Crisis" research and exploit **identity
+confusion on a Domain Controller** to take over the domain. They are therefore
+`dc_only` (only evaluated on a DC, like BadSuccessor) and **server-only**: the
+patched component ships to every SKU, but a DC never reports a client build, so only
+server builds need a threshold. The `(10,0,26100)` Server-2025 split is keyed
+`srv2025` (a 26100 DC is always Server 2025; a Win11 24H2 client is out of scope).
+
+Thresholds come from NVD **`cpeMatch.versionEndExcluding`** — the same field used for
+every other CVE here. Server 2012 / 2012 R2 receive **no** `cpeMatch` bound in NVD
+(ESU/EOL products), so their thresholds are taken instead from NVD's newer
+`affected[].affectedData[].versions[].lessThan`. These legacy DCs are exactly the
+real-world targets for a domain takeover and are clearly patched, so they are kept
+rather than dropped.
+
+### CVE-2026-25177 — KerberLoss (AD DS name confusion → Kerberos downgrade / takeover)
+
+Patch Tuesday **2026-03-10**. CVSS 8.8 `AV:N/AC:L/PR:L/S:U/C:H/I:H/A:H`. CWE-641.
+
+```
+(6,2,9200):   25973   # Server 2012            (affectedData; no cpeMatch bound)
+(6,3,9600):   23074   # Server 2012 R2         (affectedData; no cpeMatch bound)
+(10,0,14393): 8957    # Server 2016 / Win10 1607
+(10,0,17763): 8511    # Server 2019 / Win10 1809
+(10,0,20348): 4830    # Server 2022
+(10,0,25398): 2207    # Server 2022 23H2
+(10,0,26100): 32463   # Server 2025  (srv2025 tier)
+```
+
+### CVE-2026-27912 — ResetNightmare (Kerberos UPN/SamAccountName confusion → takeover)
+
+Patch Tuesday **2026-04-14**. A low-priv user with Write/create-object rights over
+any user/computer confuses the DC's UPN↔SamAccountName mapping and resets a
+privileged account's password → instant Domain Admin.
+
+```
+(6,2,9200):   26026   # Server 2012            (affectedData; no cpeMatch bound)
+(6,3,9600):   23132   # Server 2012 R2         (affectedData; no cpeMatch bound)
+(10,0,14393): 9060    # Server 2016 / Win10 1607
+(10,0,17763): 8644    # Server 2019 / Win10 1809
+(10,0,20348): 5020    # Server 2022
+(10,0,25398): 2274    # Server 2022 23H2
+(10,0,26100): 32690   # Server 2025  (srv2025 tier)
+```
+
+Same inherited caveat as the rest: this is a patch-level heuristic, not a probe of
+the bug. Source:
+<https://www.semperis.com/blog/identity-crisis-novel-vulnerabilities-leading-to-kerberos-downgrade-dos-and-full-domain-takeover/>.

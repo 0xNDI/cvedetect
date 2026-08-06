@@ -77,6 +77,10 @@ class Cve:
 
 # Friendly product names for help/listing.
 _PRODUCT_NAMES: dict[tuple, str] = {
+    (6003, None): "Server 2008 SP2",
+    (7601, None): "Server 2008 R2 SP1",
+    (9200, None): "Server 2012",
+    (9600, None): "Server 2012 R2",
     (14393, None): "Server 2016 / Win10 1607",
     (17763, None): "Server 2019 / Win10 1809",
     (19044, None): "Win10 21H2",
@@ -233,6 +237,59 @@ _CVE_2026_54121 = Cve(
     },
 )
 
+_CVE_2026_25177 = Cve(
+    cve="CVE-2026-25177",
+    alias="KerberLoss",
+    patch_tuesday="2026-03-10",
+    message="AD DS name-confusion -> Kerberos downgrade DoS / domain takeover (DC only)",
+    cwe="CWE-641",
+    exploitation="https://www.semperis.com/blog/identity-crisis-novel-vulnerabilities-leading-to-kerberos-downgrade-dos-and-full-domain-takeover/",
+    msrc=_c("CVE-2026-25177"),
+    # DC-only AD-DS/Kerberos flaw (CVSS 8.8 AV:N): identity confusion on the DC
+    # enables a Kerberos downgrade DoS and, chained, full domain takeover (Semperis
+    # research). Server-only; a DC never reports a client build, so only server
+    # builds are listed. 26100 is keyed srv2025 (a 26100 DC is always Server 2025).
+    dc_only=True,
+    patches={
+        # UBRs from NVD cpeMatch versionEndExcluding. Server 2012 / 2012 R2 get no
+        # cpeMatch bound (ESU/EOL); their thresholds come from NVD affectedData
+        # lessThan — they are affected legacy DCs and prime real-world targets.
+        (6, 2, 9200, None): 25973,  # Server 2012
+        (6, 3, 9600, None): 23074,  # Server 2012 R2
+        (10, 0, 14393, None): 8957,  # Server 2016
+        (10, 0, 17763, None): 8511,  # Server 2019
+        (10, 0, 20348, None): 4830,  # Server 2022
+        (10, 0, 25398, None): 2207,  # Server 2022 23H2
+        (10, 0, 26100, "srv2025"): 32463,  # Server 2025
+    },
+)
+
+_CVE_2026_27912 = Cve(
+    cve="CVE-2026-27912",
+    alias="ResetNightmare",
+    patch_tuesday="2026-04-14",
+    message="Kerberos UPN/SamAccountName identity confusion -> domain takeover (DC only)",
+    cwe="CWE-285",
+    exploitation="https://www.semperis.com/blog/identity-crisis-novel-vulnerabilities-leading-to-kerberos-downgrade-dos-and-full-domain-takeover/",
+    msrc=_c("CVE-2026-27912"),
+    # DC-only Kerberos flaw: a low-priv user with Write/create-object rights over
+    # any user/computer can confuse a DC's UPN<->SamAccountName mapping and reset a
+    # privileged account's password -> instant Domain Admin (Semperis research).
+    dc_only=True,
+    patches={
+        # UBRs from NVD cpeMatch versionEndExcluding. Server 2012 / 2012 R2 get no
+        # cpeMatch bound (ESU/EOL); their thresholds come from NVD affectedData
+        # lessThan — they are affected legacy DCs and prime real-world targets.
+        (6, 2, 9200, None): 26026,  # Server 2012
+        (6, 3, 9600, None): 23132,  # Server 2012 R2
+        (10, 0, 14393, None): 9060,  # Server 2016
+        (10, 0, 17763, None): 8644,  # Server 2019
+        (10, 0, 20348, None): 5020,  # Server 2022
+        (10, 0, 25398, None): 2274,  # Server 2022 23H2
+        (10, 0, 26100, "srv2025"): 32690,  # Server 2025
+    },
+)
+
 # --- Local Elevation-of-Privilege CVEs (the original four) ----------------
 _CVE_2025_55680 = Cve(
     cve="CVE-2025-55680",
@@ -335,6 +392,8 @@ CVE_DATABASE: list[Cve] = [
     _CVE_2025_53779,
     _CVE_2024_49019,
     _CVE_2026_54121,
+    _CVE_2026_25177,
+    _CVE_2026_27912,
     _CVE_2025_55680,
     _CVE_2026_42980,
     _CVE_2026_50343,
