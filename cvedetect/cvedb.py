@@ -161,7 +161,7 @@ _CVE_2025_58726 = Cve(
 _CVE_2025_54918 = Cve(
     cve="CVE-2025-54918",
     alias="NTLM MIC Bypass",
-    patch_tuesday="2025-11-11",
+    patch_tuesday="2025-09-09",
     message="Note that without CVE-2025-33073 only Windows Server 2025 is exploitable",
     cwe="CWE-287",
     exploitation="https://yousofnahya.medium.com/hands-on-exploitation-of-cve-2025-54918-cf376ebb40e1",
@@ -176,9 +176,12 @@ _CVE_2025_54918 = Cve(
         (10, 0, 14393, None): 8422,
         (10, 0, 17763, None): 7792,
         (10, 0, 19044, None): 6332,
+        (10, 0, 19045, None): 6332,  # Win10 22H2
+        (10, 0, 20348, None): 4171,  # Server 2022 (KB5065432)
         (10, 0, 22621, None): 5909,
         (10, 0, 22631, None): 5909,
-        (10, 0, 26100, None): 6508,  # a 26100 DC is Server 2025 (dc_only gate)
+        (10, 0, 25398, None): 1849,  # Server 2022 23H2 (KB5065425)
+        (10, 0, 26100, None): 6584,  # Server 2025 / Win11 24H2 (KB5065426)
     },
 )
 

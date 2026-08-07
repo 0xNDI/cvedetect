@@ -53,6 +53,10 @@ def test_all_cves_present():
 @pytest.mark.parametrize(
     "cve_id, key, expected",
     [
+        # Sep 2025 (CVE-2025-54918, NTLM MIC Bypass) — DC-only
+        ("CVE-2025-54918", (10, 0, 20348, None), 4171),  # Server 2022 (regression: was missing)
+        ("CVE-2025-54918", (10, 0, 25398, None), 1849),  # Server 2022 23H2 (added vs enum_cve)
+        ("CVE-2025-54918", (10, 0, 26100, None), 6584),  # 24H2 / Server 2025 (corrected 6508 -> 6584)
         # Oct 2025 (CVE-2025-55680)
         ("CVE-2025-55680", (10, 0, 19045, None), 6456),  # Win10 22H2 (added vs enum_cve)
         ("CVE-2025-55680", (10, 0, 22631, None), 6060),  # Win11 23H2 (added vs enum_cve)
@@ -93,6 +97,41 @@ def test_all_cves_present():
 def test_threshold_values(cve_id, key, expected):
     cve = cvedb.CVE_BY_ID[cve_id.lower()]
     assert cve.threshold(key) == expected
+
+
+# --- CVE-2025-54918 regression (Puppy.htb: missing Server 2022 row) ------
+
+
+def test_54918_detected_on_unpatched_server_2022_dc():
+    """Regression for the Puppy.htb discrepancy: CVE-2025-54918 must be detected
+    on an unpatched Server 2022 DC (UBR 3453 < 4171). It was previously dropped
+    because the build-20348 threshold row was missing from the patch table."""
+    cve = cvedb.CVE_BY_ID["cve-2025-54918"]
+    host = HostInfo(
+        major=10,
+        minor=0,
+        build=20348,
+        ubr=3453,
+        os_string="Windows Server 2022 Build 20348",
+        signing_required=True,
+        is_dc=True,
+    )
+    assert host_key(host) == (10, 0, 20348, None)
+    v = evaluate(cve, host)
+    assert v.vulnerable is True
+    assert v.threshold == 4171
+
+
+def test_54918_patched_at_server_2022_threshold():
+    cve = cvedb.CVE_BY_ID["cve-2025-54918"]
+    host = _host(20348, 4171, os_string="Windows Server 2022", is_dc=True)
+    assert evaluate(cve, host).vulnerable is False  # patched at equality (ubr < threshold is False)
+
+
+def test_54918_24h2_uses_corrected_ubr_6584():
+    # The 26100 row was 6508 (inherited from enum_cve); MSRC / KB5065426 = 6584.
+    cve = cvedb.CVE_BY_ID["cve-2025-54918"]
+    assert cve.threshold((10, 0, 26100, None)) == 6584
 
 
 def test_50343_does_not_affect_14393():
