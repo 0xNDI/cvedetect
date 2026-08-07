@@ -57,6 +57,15 @@ def test_all_cves_present():
         ("CVE-2025-54918", (10, 0, 20348, None), 4171),  # Server 2022 (regression: was missing)
         ("CVE-2025-54918", (10, 0, 25398, None), 1849),  # Server 2022 23H2 (added vs enum_cve)
         ("CVE-2025-54918", (10, 0, 26100, None), 6584),  # 24H2 / Server 2025 (corrected 6508 -> 6584)
+        # --- KB-audit corrections ---
+        # CVE-2025-33073: missing client rows added (Jun 2025 Patch Tuesday)
+        ("CVE-2025-33073", (10, 0, 19045, None), 5965),  # Win10 22H2 (was missing)
+        ("CVE-2025-33073", (10, 0, 22631, None), 5472),  # Win11 23H2 (was missing)
+        # CVE-2025-58726: missing client rows added (Oct 2025 Patch Tuesday)
+        ("CVE-2025-58726", (10, 0, 19045, None), 6456),  # Win10 22H2 (was missing)
+        ("CVE-2025-58726", (10, 0, 22631, None), 6060),  # Win11 23H2 (was missing)
+        # CVE-2025-53779: hotpatch -> standard cumulative (KB5063878)
+        ("CVE-2025-53779", (10, 0, 26100, None), 4946),  # Server 2025 (was 4851 hotpatch)
         # Oct 2025 (CVE-2025-55680)
         ("CVE-2025-55680", (10, 0, 19045, None), 6456),  # Win10 22H2 (added vs enum_cve)
         ("CVE-2025-55680", (10, 0, 22631, None), 6060),  # Win11 23H2 (added vs enum_cve)
@@ -91,7 +100,7 @@ def test_all_cves_present():
         ("CVE-2026-25177", (10, 0, 17763, None), 8511),  # Server 2019
         ("CVE-2026-25177", (10, 0, 20348, None), 4830),  # Server 2022
         ("CVE-2026-25177", (10, 0, 25398, None), 2207),  # Server 2022 23H2
-        ("CVE-2026-25177", (10, 0, 26100, "srv2025"), 32463),  # Server 2025
+        ("CVE-2026-25177", (10, 0, 26100, "srv2025"), 32522),  # Server 2025 (was 32463 hotpatch)
     ],
 )
 def test_threshold_values(cve_id, key, expected):
@@ -142,6 +151,28 @@ def test_50343_does_not_affect_14393():
 def test_49176_affects_14393():
     cve = cvedb.CVE_BY_ID["cve-2026-49176"]
     assert cve.threshold((10, 0, 14393, None)) == 9339
+
+
+# --- KB audit: hotpatch-vs-standard-cumulative regressions --------------
+
+
+def test_53779_hotpatch_gap_reported_vulnerable():
+    """Regression: the 53779 threshold was the Azure hotpatch (4851 / KB5064010),
+    not the standard cumulative (4946 / KB5063878). A Server 2025 DC in the
+    4851-4945 gap must be reported VULNERABLE — the old value hid it."""
+    cve = cvedb.CVE_BY_ID["cve-2025-53779"]
+    assert cve.threshold((10, 0, 26100, None)) == 4946
+    host = _host(26100, 4900, os_string="Windows Server 2025", is_dc=True)
+    assert evaluate(cve, host).vulnerable is True  # 4900 < 4946 (old 4851 -> falsely patched)
+
+
+def test_25177_srv2025_uses_standard_cumulative():
+    """Regression: the 25177 srv2025 threshold was the hotpatch (32463), not the
+    standard cumulative (KB5078740 = 32522). A DC in the gap is vulnerable."""
+    cve = cvedb.CVE_BY_ID["cve-2026-25177"]
+    assert cve.threshold((10, 0, 26100, "srv2025")) == 32522
+    host = _host(26100, 32500, os_string="Windows Server 2025", is_dc=True)
+    assert evaluate(cve, host).vulnerable is True  # 32500 < 32522 (old 32463 -> falsely patched)
 
 
 # --- host_key disambiguation ---------------------------------------------
@@ -266,7 +297,7 @@ def test_dc_only_cve_skipped_on_non_dc():
 def test_dc_only_cve_checked_on_dc():
     host = _host(26100, 1, os_string="Windows Server 2025", is_dc=True)
     v = evaluate(cvedb.CVE_BY_ID["cve-2025-53779"], host)
-    assert v.vulnerable is True  # UBR 1 < 4851, and it is a DC
+    assert v.vulnerable is True  # UBR 1 < 4946, and it is a DC
 
 
 # --- ResetNightmare (CVE-2026-27912): DC-only, server-only ----------------
@@ -330,13 +361,13 @@ def test_kerberloss_vulnerable_on_unpatched_dc():
     cve = cvedb.CVE_BY_ID["cve-2026-25177"]
     host = _host(26100, 32000, os_string="Windows Server 2025", is_dc=True)
     v = evaluate(cve, host)
-    assert v.vulnerable is True  # 32000 < 32463
-    assert v.threshold == 32463
+    assert v.vulnerable is True  # 32000 < 32522
+    assert v.threshold == 32522
 
 
 def test_kerberloss_patched_on_dc_at_threshold():
     cve = cvedb.CVE_BY_ID["cve-2026-25177"]
-    host = _host(26100, 32463, os_string="Windows Server 2025", is_dc=True)
+    host = _host(26100, 32522, os_string="Windows Server 2025", is_dc=True)
     assert evaluate(cve, host).vulnerable is False
 
 

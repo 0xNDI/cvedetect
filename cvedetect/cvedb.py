@@ -112,7 +112,7 @@ def _c(name: str) -> str:
 _CVE_2025_33073 = Cve(
     cve="CVE-2025-33073",
     alias="NTLM reflection",
-    patch_tuesday="2025-09-09",
+    patch_tuesday="2025-06-10",
     message="Relay possible from SMB to any protocol",
     cwe="CWE-287",
     exploitation="https://www.synacktiv.com/en/publications/ntlm-reflection-is-dead-long-live-ntlm-reflection-an-in-depth-analysis-of-cve-2025",
@@ -122,8 +122,10 @@ _CVE_2025_33073 = Cve(
         (10, 0, 14393, None): 8148,  # Server 2016 / Win10 1607
         (10, 0, 17763, None): 7434,  # Server 2019 / Win10 1809
         (10, 0, 19044, None): 5965,  # Win10 21H2
+        (10, 0, 19045, None): 5965,  # Win10 22H2
         (10, 0, 20348, None): 3807,  # Server 2022
         (10, 0, 22621, None): 5472,  # Win11 22H2
+        (10, 0, 22631, None): 5472,  # Win11 23H2
         (10, 0, 25398, None): 1665,  # Server 2022 23H2
         (10, 0, 26100, None): 4270,  # Server 2025 / Win11 24H2 (lumped)
     },
@@ -147,8 +149,10 @@ _CVE_2025_58726 = Cve(
         (10, 0, 14393, None): 8519,  # Server 2016 / Win10 1607
         (10, 0, 17763, None): 7919,  # Server 2019 / Win10 1809
         (10, 0, 19044, None): 6456,  # Win10 21H2
+        (10, 0, 19045, None): 6456,  # Win10 22H2
         (10, 0, 20348, None): 4294,  # Server 2022
         (10, 0, 22621, None): 6060,  # Win11 22H2
+        (10, 0, 22631, None): 6060,  # Win11 23H2
         (10, 0, 25398, None): 1913,  # Server 2022 23H2
         (10, 0, 26100, None): 6899,  # Server 2025 / Win11 24H2 (Oct 2025: both tiers 6899)
         (10, 0, 26200, None): 6899,  # Win11 25H2
@@ -188,21 +192,21 @@ _CVE_2025_54918 = Cve(
 _CVE_2025_53779 = Cve(
     cve="CVE-2025-53779",
     alias="BadSuccessor",
-    patch_tuesday="2025-01-14",
+    patch_tuesday="2025-08-12",
     message="Escalation to Domain Admin possible via dMSA Kerberos abuse",
     cwe="dMSA",
     exploitation="https://www.akamai.com/blog/security-research/abusing-dmsa-for-privilege-escalation-in-active-directory",
     msrc=_c("CVE-2025-53779"),
     dc_only=True,
     patches={
-        (10, 0, 26100, None): 4851,  # Server 2025 DC only
+        (10, 0, 26100, None): 4946,  # Server 2025 DC only (KB5063878; was 4851 hotpatch)
     },
 )
 
 _CVE_2024_49019 = Cve(
     cve="CVE-2024-49019",
     alias="ESC15 / EKUwu",
-    patch_tuesday="2024-12-10",
+    patch_tuesday="2024-11-12",
     message="If host is an AD CS / CA server, it may be vulnerable to ESC15",
     cwe="AD-CS",
     exploitation="https://trustedsec.com/blog/ekuwu-not-just-another-ad-cs-esc",
@@ -263,7 +267,7 @@ _CVE_2026_25177 = Cve(
         (10, 0, 17763, None): 8511,  # Server 2019
         (10, 0, 20348, None): 4830,  # Server 2022
         (10, 0, 25398, None): 2207,  # Server 2022 23H2
-        (10, 0, 26100, "srv2025"): 32463,  # Server 2025
+        (10, 0, 26100, "srv2025"): 32522,  # Server 2025 (KB5078740; was 32463 hotpatch)
     },
 )
 
