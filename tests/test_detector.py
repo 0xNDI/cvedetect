@@ -1,6 +1,6 @@
 """Unit tests for the detection logic and CVE patch tables.
 
-These lock in (a) the exact minimum-patched-UBR values from the design doc and
+These lock in (a) the exact minimum-patched-UBR values in cvedb.py and
 (b) the 26100 / Server-2025 vs client disambiguation, which is the whole point of
 the tool vs NetExec's enum_cve.
 """
@@ -27,7 +27,7 @@ def _host(build: int, ubr: int | None, os_string="Windows 10", major=10, minor=0
     )
 
 
-# --- CVE database presence & exact UBR values (from cvedetect.md) ----------
+# --- CVE database presence & exact UBR values -------------------------
 
 
 def test_all_cves_present():
