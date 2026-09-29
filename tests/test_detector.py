@@ -47,6 +47,7 @@ def test_all_cves_present():
         "CVE-2026-42980",
         "CVE-2026-50343",
         "CVE-2026-49176",
+        "CVE-2026-69451",
     }
 
 
@@ -101,6 +102,16 @@ def test_all_cves_present():
         ("CVE-2026-25177", (10, 0, 20348, None), 4830),  # Server 2022
         ("CVE-2026-25177", (10, 0, 25398, None), 2207),  # Server 2022 23H2
         ("CVE-2026-25177", (10, 0, 26100, "srv2025"), 32522),  # Server 2025 (was 32463 hotpatch)
+        # Sep 2026 (CVE-2026-69451, Fastprox EOP) — MSRC FixedBuild values
+        ("CVE-2026-69451", (6, 2, 9200, None), 26349),  # Server 2012 (KB5123065)
+        ("CVE-2026-69451", (6, 3, 9600, None), 23398),  # Server 2012 R2 (KB5123066)
+        ("CVE-2026-69451", (10, 0, 14393, None), 9512),  # Server 2016 / 1607 (KB5123099)
+        ("CVE-2026-69451", (10, 0, 20348, None), 5622),  # Server 2022 (KB5122882)
+        ("CVE-2026-69451", (10, 0, 26100, "client"), 9445),  # Win11 24H2 (KB5124008)
+        ("CVE-2026-69451", (10, 0, 26100, "srv2025"), 33438),  # Server 2025 (KB5122871)
+        ("CVE-2026-69451", (10, 0, 28000, "x64"), 2954),  # Win11 26H1 (KB5124012)
+        ("CVE-2026-69451", (10, 0, 28000, "arm"), 2954),
+        ("CVE-2026-69451", (10, 0, 25398, None), None),  # 23H2 not affected (MSRC)
     ],
 )
 def test_threshold_values(cve_id, key, expected):
@@ -151,6 +162,31 @@ def test_50343_does_not_affect_14393():
 def test_49176_affects_14393():
     cve = cvedb.CVE_BY_ID["cve-2026-49176"]
     assert cve.threshold((10, 0, 14393, None)) == 9339
+
+
+# --- CVE-2026-69451 (Fastprox EOP, Sep 2026) ------------------------------
+
+
+def test_69451_detected_on_unpatched_server_2025():
+    cve = cvedb.CVE_BY_ID["cve-2026-69451"]
+    host = _host(26100, 33300, os_string="Windows Server 2025")
+    v = evaluate(cve, host)
+    assert v.vulnerable is True  # 33300 < 33438
+    assert v.threshold == 33438
+
+
+def test_69451_patched_at_server_2025_threshold():
+    cve = cvedb.CVE_BY_ID["cve-2026-69451"]
+    host = _host(26100, 33438, os_string="Windows Server 2025")
+    assert evaluate(cve, host).vulnerable is False
+
+
+def test_69451_vulnerable_on_low_ubr_client():
+    cve = cvedb.CVE_BY_ID["cve-2026-69451"]
+    host = _host(19045, 7724, os_string="Windows 10")
+    v = evaluate(cve, host)
+    assert v.vulnerable is True  # 7724 < 7725
+    assert v.threshold == 7725
 
 
 # --- KB audit: hotpatch-vs-standard-cumulative regressions --------------
@@ -268,7 +304,7 @@ def test_26100_disambiguation_makes_the_difference():
 
 def test_select_all():
     selected, unknown = cvedb.select(None)
-    assert len(selected) == 12
+    assert len(selected) == 13
     assert unknown == []
 
 

@@ -391,6 +391,39 @@ _CVE_2026_49176 = Cve(
     },
 )
 
+# --- Sep 2026 -------------------------------------------------------------
+# Patch Tuesday 2026-09-08. Shared month with nothing else we track. fastprox.dll
+# (WMI) IWbemContext type confusion -> code execution in Winmgmt (LocalSystem).
+_CVE_2026_69451 = Cve(
+    cve="CVE-2026-69451",
+    alias="Fastprox EOP",
+    patch_tuesday="2026-09-08",
+    message="fastprox.dll IWbemContext type confusion -> local EoP to SYSTEM (Winmgmt)",
+    cwe="CWE-416",
+    exploitation="https://fj016.fr/blog/cve-2026-69451-en",
+    msrc=_c("CVE-2026-69451"),
+    patches={
+        # UBRs from MSRC CVRF FixedBuild (KB5123065/66/99, 5122876/78/82/80,
+        # 5122871, 5124008, 5124012); NVD cpeMatch agrees on every value, so no
+        # hotpatch override applies this month. 22621 (Win11 22H2) and 25398
+        # (Server 2022 23H2) are NOT in MSRC's affected-product list for this
+        # CVE — their absence is deliberate, not a missing row.
+        (6, 2, 9200, None): 26349,  # Server 2012
+        (6, 3, 9600, None): 23398,  # Server 2012 R2
+        (10, 0, 14393, None): 9512,  # Server 2016 / Win10 1607
+        (10, 0, 17763, None): 9245,  # Server 2019 / Win10 1809
+        (10, 0, 19044, None): 7725,  # Win10 21H2
+        (10, 0, 19045, None): 7725,  # Win10 22H2
+        (10, 0, 20348, None): 5622,  # Server 2022
+        (10, 0, 22631, None): 7582,  # Win11 23H2
+        (10, 0, 26100, "client"): 9445,  # Win11 24H2 (KB5124008)
+        (10, 0, 26100, "srv2025"): 33438,  # Server 2025 (KB5122871)
+        (10, 0, 26200, None): 9445,  # Win11 25H2
+        (10, 0, 28000, "x64"): 2954,  # Win11 26H1 (KB5124012)
+        (10, 0, 28000, "arm"): 2954,
+    },
+)
+
 # Ordered for stable output: network/relay/DC/AD-CS first, then local EoP.
 CVE_DATABASE: list[Cve] = [
     _CVE_2025_33073,
@@ -405,6 +438,7 @@ CVE_DATABASE: list[Cve] = [
     _CVE_2026_42980,
     _CVE_2026_50343,
     _CVE_2026_49176,
+    _CVE_2026_69451,
 ]
 
 CVE_BY_ID: dict[str, Cve] = {c.id.lower(): c for c in CVE_DATABASE}
