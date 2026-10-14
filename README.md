@@ -1,9 +1,10 @@
 # cvedetect
 
 Detect Windows **local Elevation-of-Privilege** patch-level CVEs over SMB by reading
-the OS build (from the SMB negotiate response) and the **UBR** (Update Build
-Revision) from `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion!UBR` via
-RemoteRegistry.
+the OS build and the **UBR** (Update Build
+Revision) from `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion` (build from
+`CurrentBuildNumber`, UBR from `!UBR`) via RemoteRegistry; the SMB negotiate
+response is only a fallback.
 
 It is the same pure patch-level heuristic NetExec's `enum_cve` module uses — it does
 **not** probe for the actual bug, does **not** verify the vulnerable component is
@@ -89,10 +90,15 @@ component is present.
 | CVE-2026-42980 | WMI integer-underflow → NT Kernel EoP        | 2026-06-09    |
 | CVE-2026-50343 | "Dark Elevator" (`InstallService`) EoP       | 2026-07-14    |
 | CVE-2026-49176 | `WalletService` link-following EoP           | 2026-07-14    |
+| CVE-2026-69451 | Fastprox (`fastprox.dll` WMI) EoP            | 2026-09-08    |
+| CVE-2026-85884 | Health Service EOP (Win11 client-only)       | 2026-10-13    |
 
 The `(10,0,26100)` collision (Win11 24H2 client vs Server 2025) is disambiguated
-from the SMB negotiate OS string — unlike `enum_cve`, which lumps it and is wrong
-for one of the two products.
+from the registry (`CurrentBuildNumber`, `InstallationType`) — unlike `enum_cve`,
+which lumps it and is wrong for one of the two products. The SMB negotiate OS
+string is unreliable here: every 24H2+ SKU (including Win11 25H2/26H2 clients)
+negotiates the same `Windows 11 / Server 2025 Build 26100`, so it is only used
+as a fallback when the registry is unreadable.
 
 ## Output
 
