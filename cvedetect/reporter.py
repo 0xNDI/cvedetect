@@ -16,7 +16,14 @@ from .detector import HostInfo, Verdict
 
 # The four local-Elevation-of-Privilege CVEs (CVSS 7.8, AV:L/PR:L) vs the
 # NetExec network/relay/DC/AD-CS set.
-_LOCAL_EOP_IDS = {"CVE-2025-55680", "CVE-2026-42980", "CVE-2026-50343", "CVE-2026-49176"}
+_LOCAL_EOP_IDS = {
+    "CVE-2025-55680",
+    "CVE-2026-42980",
+    "CVE-2026-50343",
+    "CVE-2026-49176",
+    "CVE-2026-69451",
+    "CVE-2026-85884",
+}
 
 
 def make_console() -> Console:

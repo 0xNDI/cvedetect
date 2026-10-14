@@ -92,6 +92,7 @@ _PRODUCT_NAMES: dict[tuple, str] = {
     (26100, "client"): "Win11 24H2 client",
     (26100, "srv2025"): "Server 2025",
     (26200, None): "Win11 25H2",
+    (26300, None): "Win11 26H2",
     (28000, "x64"): "Win11 26H1 x64",
     (28000, "arm"): "Win11 26H1 ARM64",
 }
@@ -424,6 +425,28 @@ _CVE_2026_69451 = Cve(
     },
 )
 
+# --- Oct 2026 -------------------------------------------------------------
+# Patch Tuesday 2026-10-13. Windows Health and Optimized Experiences Service
+# (client-only service): MSRC lists NO Server product, so the 26100 row is keyed
+# "client" only — a Server 2025 host resolves via the untiered fallback, which is
+# absent, and is correctly out of scope.
+_CVE_2026_85884 = Cve(
+    cve="CVE-2026-85884",
+    alias="Health Service EOP",
+    patch_tuesday="2026-10-13",
+    message="Health and Optimized Experiences Service missing auth -> local EoP to SYSTEM",
+    cwe="CWE-306",
+    exploitation=_c("CVE-2026-85884"),
+    msrc=_c("CVE-2026-85884"),
+    patches={
+        (10, 0, 26100, "client"): 9711,  # Win11 24H2 (KB5127648); Server 2025 NOT affected
+        (10, 0, 26200, None): 9711,  # Win11 25H2 (KB5127648)
+        (10, 0, 26300, None): 9711,  # Win11 26H2 (KB5127648)
+        (10, 0, 28000, "x64"): 3231,  # Win11 26H1 (KB5127646)
+        (10, 0, 28000, "arm"): 3231,
+    },
+)
+
 # Ordered for stable output: network/relay/DC/AD-CS first, then local EoP.
 CVE_DATABASE: list[Cve] = [
     _CVE_2025_33073,
@@ -439,6 +462,7 @@ CVE_DATABASE: list[Cve] = [
     _CVE_2026_50343,
     _CVE_2026_49176,
     _CVE_2026_69451,
+    _CVE_2026_85884,
 ]
 
 CVE_BY_ID: dict[str, Cve] = {c.id.lower(): c for c in CVE_DATABASE}

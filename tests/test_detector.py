@@ -10,12 +10,20 @@ from __future__ import annotations
 import pytest
 
 from cvedetect import cvedb
-from cvedetect.connection import _is_service_starting
+from cvedetect.connection import OsVersion, RegVersion, _is_service_starting, merge_version
 from cvedetect.detector import HostInfo, evaluate, host_key
 from cvedetect.reporter import scan_result
 
 
-def _host(build: int, ubr: int | None, os_string="Windows 10", major=10, minor=0, is_dc=False) -> HostInfo:
+def _host(
+    build: int,
+    ubr: int | None,
+    os_string="Windows 10",
+    major=10,
+    minor=0,
+    is_dc=False,
+    installation_type: str | None = None,
+) -> HostInfo:
     return HostInfo(
         major=major,
         minor=minor,
@@ -24,6 +32,7 @@ def _host(build: int, ubr: int | None, os_string="Windows 10", major=10, minor=0
         os_string=os_string,
         signing_required=False,
         is_dc=is_dc,
+        installation_type=installation_type,
     )
 
 
@@ -48,6 +57,7 @@ def test_all_cves_present():
         "CVE-2026-50343",
         "CVE-2026-49176",
         "CVE-2026-69451",
+        "CVE-2026-85884",
     }
 
 
@@ -112,6 +122,14 @@ def test_all_cves_present():
         ("CVE-2026-69451", (10, 0, 28000, "x64"), 2954),  # Win11 26H1 (KB5124012)
         ("CVE-2026-69451", (10, 0, 28000, "arm"), 2954),
         ("CVE-2026-69451", (10, 0, 25398, None), None),  # 23H2 not affected (MSRC)
+        # Oct 2026 (CVE-2026-85884, Health Service EOP) — client-only, no Server rows
+        ("CVE-2026-85884", (10, 0, 26100, "client"), 9711),  # Win11 24H2 (KB5127648)
+        ("CVE-2026-85884", (10, 0, 26100, "srv2025"), None),  # Server 2025 NOT affected
+        ("CVE-2026-85884", (10, 0, 26200, None), 9711),  # Win11 25H2
+        ("CVE-2026-85884", (10, 0, 26300, None), 9711),  # Win11 26H2
+        ("CVE-2026-85884", (10, 0, 28000, "x64"), 3231),  # Win11 26H1 (KB5127646)
+        ("CVE-2026-85884", (10, 0, 28000, "arm"), 3231),
+        ("CVE-2026-85884", (10, 0, 20348, None), None),  # Server 2022 not affected
     ],
 )
 def test_threshold_values(cve_id, key, expected):
@@ -187,6 +205,79 @@ def test_69451_vulnerable_on_low_ubr_client():
     v = evaluate(cve, host)
     assert v.vulnerable is True  # 7724 < 7725
     assert v.threshold == 7725
+
+
+# --- CVE-2026-85884 (Health Service EOP, Oct 2026) — client-only -----------
+
+
+def test_85884_detected_on_unpatched_win11_24h2_client():
+    cve = cvedb.CVE_BY_ID["cve-2026-85884"]
+    host = _host(26100, 8000, os_string="Windows 11 Pro")
+    v = evaluate(cve, host)
+    assert v.vulnerable is True  # 8000 < 9711
+    assert v.threshold == 9711
+
+
+def test_85884_patched_at_win11_threshold():
+    cve = cvedb.CVE_BY_ID["cve-2026-85884"]
+    host = _host(26100, 9711, os_string="Windows 11 Pro")
+    assert evaluate(cve, host).vulnerable is False
+
+
+def test_85884_not_flagged_on_server_2025():
+    """MSRC lists no Server product: a Server 2025 host (even unpatched) must be
+    inconclusive, never vulnerable — the srv2025 fallback has no untiered row."""
+    cve = cvedb.CVE_BY_ID["cve-2026-85884"]
+    host = _host(26100, 1000, os_string="Windows 11 / Server 2025 Build 26100")
+    v = evaluate(cve, host)
+    assert v.vulnerable is None
+    assert v.threshold is None
+
+
+# --- negotiate-string misfingerprint regression (live 25H2 client) --------
+
+
+def test_merge_version_prefers_registry_build():
+    """Every 24H2+ SKU negotiates "Windows 11 / Server 2025 Build 26100", but a
+    Win11 25H2 client's registry CurrentBuildNumber is 26200. The registry wins,
+    else 25H2/26H2 clients are keyed as 26100 hosts."""
+    osv = OsVersion(os_string="Windows 11 / Server 2025 Build 26100", build=26100, major=10, minor=0)
+    reg = RegVersion(build=26200, ubr=8737, installation_type="Client")
+    merged = merge_version(osv, reg)
+    assert merged.build == 26200
+    assert merged.installation_type == "Client"
+
+
+def test_85884_detected_on_misnegotiating_win11_25h2_client():
+    """Regression from the live lab host: a Win11 25H2 client (registry build
+    26200, InstallationType=Client) negotiates the shared 26100/Server-2025 OS
+    string. It must be keyed as 26200 client and REPORTED VULNERABLE at
+    UBR 8737 < 9711 — not silently skipped as Server 2025."""
+    cve = cvedb.CVE_BY_ID["cve-2026-85884"]
+    host = _host(
+        26200,
+        8737,
+        os_string="Windows 11 / Server 2025 Build 26100",
+        installation_type="Client",
+    )
+    assert host_key(host) == (10, 0, 26200, None)
+    v = evaluate(cve, host)
+    assert v.vulnerable is True
+    assert v.threshold == 9711
+
+
+def test_85884_not_flagged_on_server_2025_via_installation_type():
+    """A real Server 2025 negotiates the same string; InstallationType=Server
+    keys it srv2025 so CVE-2026-85884 stays out of scope."""
+    cve = cvedb.CVE_BY_ID["cve-2026-85884"]
+    host = _host(
+        26100,
+        1000,
+        os_string="Windows 11 / Server 2025 Build 26100",
+        installation_type="Server",
+    )
+    assert host_key(host) == (10, 0, 26100, "srv2025")
+    assert evaluate(cve, host).vulnerable is None
 
 
 # --- KB audit: hotpatch-vs-standard-cumulative regressions --------------
@@ -304,7 +395,7 @@ def test_26100_disambiguation_makes_the_difference():
 
 def test_select_all():
     selected, unknown = cvedb.select(None)
-    assert len(selected) == 13
+    assert len(selected) == 14
     assert unknown == []
 
 

@@ -236,6 +236,7 @@ def main(argv: list[str] | None = None) -> int:
             os_string=osv.os_string,
             signing_required=osv.signing_required,
             is_dc=osv.is_dc,
+            installation_type=osv.installation_type,
         )
         verdicts = [evaluate(c, host) for c in selected]
         tier = host_key(host)[3]

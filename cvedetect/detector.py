@@ -25,11 +25,16 @@ class HostInfo:
     os_string: str
     signing_required: bool
     is_dc: bool = False
+    installation_type: str | None = None
 
     @property
     def is_server_2025(self) -> bool:
-        # SMB negotiate OS string for Server 2025 reads e.g.
-        # "Windows 11 / Server 2025 Build 26100" — it contains "Server 2025".
+        # Registry InstallationType ("Client" / "Server" / "Server Core") is
+        # authoritative: every 24H2+ SKU negotiates the same OS string
+        # "Windows 11 / Server 2025 Build 26100", so the string grep is only a
+        # fallback for hosts where the registry read failed.
+        if self.installation_type is not None:
+            return "server" in self.installation_type.lower()
         return "server 2025" in (self.os_string or "").lower()
 
     @property

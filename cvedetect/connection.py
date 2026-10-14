@@ -66,6 +66,7 @@ class OsVersion:
     build: int | None = None
     signing_required: bool = False
     is_dc: bool = False
+    installation_type: str | None = None
 
 
 @dataclass
@@ -82,6 +83,7 @@ class RegVersion:
     build: int | None = None
     ubr: int | None = None
     product_name: str | None = None
+    installation_type: str | None = None
 
 
 def connect(address: str, auth: AuthArgs) -> SMBConnection:
@@ -140,18 +142,20 @@ def merge_version(osv: OsVersion, reg: RegVersion) -> OsVersion:
     """Fill SMB-side gaps from the registry read.
 
     Under Kerberos the SMB negotiate response carries no OS info at all, so
-    major/minor/build and the edition string all come from the registry. Under
-    NTLM the SMB values win and the registry is only a fallback. ProductName is
-    also used to recover Server-2025 detection when the negotiate OS string is
-    empty (is_server_2025 greps the OS string for "Server 2025").
+    major/minor/build and the edition string all come from the registry. The
+    build itself always prefers the registry: the NTLM negotiate string is
+    hard-coded to "Windows 11 / Server 2025 Build 26100" for every 24H2+ SKU,
+    so a Win11 25H2/26H2 client negotiates 26100 while its CurrentBuildNumber
+    is 26200/26300. ProductName and InstallationType are registry-only.
     """
     return OsVersion(
         os_string=osv.os_string or (reg.product_name or ""),
         major=osv.major if osv.major is not None else reg.major,
         minor=osv.minor if osv.minor is not None else reg.minor,
-        build=osv.build if osv.build is not None else reg.build,
+        build=reg.build if reg.build is not None else osv.build,
         signing_required=osv.signing_required,
         is_dc=osv.is_dc,
+        installation_type=reg.installation_type,
     )
 
 
@@ -300,6 +304,8 @@ def _query_version_values(dce) -> RegVersion:
         rv.build = int(str(cb).rstrip("\x00")) if cb is not None else None
         pn = _q("ProductName")
         rv.product_name = str(pn).rstrip("\x00") if pn is not None else None
+        it = _q("InstallationType")
+        rv.installation_type = str(it).rstrip("\x00") if it is not None else None
     except SessionError as e:
         raise CveDetectError(f"winreg query failed: {e}") from e
     except DCERPCException as e:
