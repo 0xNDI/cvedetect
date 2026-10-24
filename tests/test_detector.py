@@ -45,6 +45,8 @@ def test_all_cves_present():
         # nxc relay / DC / AD-CS set
         "CVE-2025-33073",
         "CVE-2025-58726",
+        "LDAP-SWITCHEROO",
+        "SMB-REAUTH",
         "CVE-2025-54918",
         "CVE-2025-53779",
         "CVE-2024-49019",
@@ -130,6 +132,30 @@ def test_all_cves_present():
         ("CVE-2026-85884", (10, 0, 28000, "x64"), 3231),  # Win11 26H1 (KB5127646)
         ("CVE-2026-85884", (10, 0, 28000, "arm"), 3231),
         ("CVE-2026-85884", (10, 0, 20348, None), None),  # Server 2022 not affected
+        # Silent relay fixes (no CVE). LDAP-SWITCHEROO: Oct 2026 server cumulatives,
+        # DC-only -> 26100 keyed srv2025 and never flags a Win11 24H2 client.
+        ("LDAP-SWITCHEROO", (10, 0, 14393, None), 9612),  # Server 2016 (KB5126868)
+        ("LDAP-SWITCHEROO", (10, 0, 17763, None), 9376),  # Server 2019 (KB5126651)
+        ("LDAP-SWITCHEROO", (10, 0, 20348, None), 5761),  # Server 2022 (KB5126655)
+        ("LDAP-SWITCHEROO", (10, 0, 25398, None), 2331),  # Server 23H2 EOL: unpatchable
+        ("LDAP-SWITCHEROO", (10, 0, 26100, "srv2025"), 33650),  # Server 2025 (KB5126646)
+        ("LDAP-SWITCHEROO", (10, 0, 26100, "client"), None),  # DC flaw, client out of scope
+        # SMB-REAUTH: Sept 2026 on the researcher-tested builds (26100 both tiers,
+        # 20348 + shared 25H2), Oct 2026 elsewhere, EOL 25398 unpatchable.
+        ("SMB-REAUTH", (10, 0, 26100, "client"), 9445),  # KB5124008
+        ("SMB-REAUTH", (10, 0, 26100, "srv2025"), 33438),  # KB5122871
+        ("SMB-REAUTH", (10, 0, 26200, None), 9445),  # Win11 25H2 (24H2 train)
+        ("SMB-REAUTH", (10, 0, 26300, None), 9711),  # Win11 26H2 (GA already hardened)
+        ("SMB-REAUTH", (10, 0, 20348, None), 5622),  # Server 2022 (KB5122882)
+        ("SMB-REAUTH", (10, 0, 17763, None), 9376),  # Server 2019 (KB5126651, Oct)
+        ("SMB-REAUTH", (10, 0, 14393, None), 9612),  # Server 2016 (KB5126868, Oct)
+        ("SMB-REAUTH", (10, 0, 19044, None), 7807),  # Win10 21H2 (KB5126657, Oct)
+        ("SMB-REAUTH", (10, 0, 19045, None), 7807),  # Win10 22H2
+        ("SMB-REAUTH", (10, 0, 22621, None), 7652),  # Win11 22H2 (KB5126653, Oct)
+        ("SMB-REAUTH", (10, 0, 22631, None), 7652),  # Win11 23H2
+        ("SMB-REAUTH", (10, 0, 25398, None), 2331),  # Server 23H2 EOL: unpatchable
+        ("SMB-REAUTH", (10, 0, 28000, "x64"), 3231),  # Win11 26H1 (KB5127646, Oct)
+        ("SMB-REAUTH", (10, 0, 28000, "arm"), 3231),
     ],
 )
 def test_threshold_values(cve_id, key, expected):
@@ -232,6 +258,56 @@ def test_85884_not_flagged_on_server_2025():
     v = evaluate(cve, host)
     assert v.vulnerable is None
     assert v.threshold is None
+
+
+# --- Silent relay fixes (LDAP-SWITCHEROO / SMB-REAUTH) --------------------
+
+
+def test_ldap_switcheroo_detected_on_unpatched_server_2022_dc():
+    cve = cvedb.CVE_BY_ID["ldap-switcheroo"]
+    host = _host(20348, 5622, os_string="Windows Server 2022", is_dc=True)
+    v = evaluate(cve, host)
+    assert v.vulnerable is True  # 5622 < 5761: Sept 2026 cumulative, pre-Oct fix
+    assert v.threshold == 5761
+
+
+def test_ldap_switcheroo_patched_at_server_2022_threshold():
+    cve = cvedb.CVE_BY_ID["ldap-switcheroo"]
+    host = _host(20348, 5761, os_string="Windows Server 2022", is_dc=True)
+    assert evaluate(cve, host).vulnerable is False
+
+
+def test_ldap_switcheroo_inconclusive_on_25h2_client():
+    """DC-only flaw: a Win11 25H2 client (26200) must never be flagged."""
+    cve = cvedb.CVE_BY_ID["ldap-switcheroo"]
+    host = _host(26200, 1000, os_string="Windows 11 Pro")
+    v = evaluate(cve, host)
+    assert v.vulnerable is None
+    assert v.threshold is None
+
+
+def test_smb_reauth_flags_sept_patched_win10():
+    """Win10 22H2 got the re-auth fix in Oct, not Sept: UBR 7725 is patched for
+    CVE-2026-69451 but still inside the SMB-REAUTH window."""
+    cve = cvedb.CVE_BY_ID["smb-reauth"]
+    host = _host(19045, 7725, os_string="Windows 10")
+    v = evaluate(cve, host)
+    assert v.vulnerable is True
+    assert v.threshold == 7807
+
+
+def test_smb_reauth_patched_on_server_2022_at_sept_threshold():
+    cve = cvedb.CVE_BY_ID["smb-reauth"]
+    host = _host(20348, 5622, os_string="Windows Server 2022")
+    assert evaluate(cve, host).vulnerable is False
+
+
+def test_smb_reauth_vulnerable_on_pre_sept_server_2025():
+    cve = cvedb.CVE_BY_ID["smb-reauth"]
+    host = _host(26100, 33437, os_string="Windows Server 2025")
+    v = evaluate(cve, host)
+    assert v.vulnerable is True  # 33437 < 33438
+    assert v.threshold == 33438
 
 
 # --- negotiate-string misfingerprint regression (live 25H2 client) --------
@@ -395,7 +471,7 @@ def test_26100_disambiguation_makes_the_difference():
 
 def test_select_all():
     selected, unknown = cvedb.select(None)
-    assert len(selected) == 14
+    assert len(selected) == 16
     assert unknown == []
 
 

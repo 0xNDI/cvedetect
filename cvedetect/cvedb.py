@@ -163,6 +163,74 @@ _CVE_2025_58726 = Cve(
     ),
 )
 
+# --- Silent relay fixes (Microsoft shipped no CVE) ------------------------
+# Same re-authentication bug class, two protocols: a connection the attacker
+# already owns keeps its original session key when the identity is swapped via a
+# relayed re-auth, so the enforced-signature check passes with a key the attacker
+# knows (blackfield.ch = SMB, SpecterOps "LDAP Switcheroo" = LDAP). Both are
+# tracked here under descriptive IDs instead of CVE numbers.
+
+_LDAP_SWITCHEROO = Cve(
+    cve="LDAP-SWITCHEROO",
+    alias="LDAP Switcheroo",
+    patch_tuesday="2026-10-13",
+    message="Relay to LDAP (389/TCP) possible even with LDAP signing required -> RBCD/shadow credentials on the DC -> domain compromise",
+    cwe="CWE-287",
+    exploitation="https://github.com/grayhatkiller/switcheroo",
+    msrc="https://specterops.io/blog/2026/10/23/ldap-signing-bypass-ntlm-relay/",
+    dc_only=True,
+    signing_message="Enforced LDAP signing bypassable: relayed re-auth bind + malicious modify stacked in one signed SASL record (389/TCP only)",
+    patches={
+        # Fix shipped with the Oct 2026 cumulative (SpecterOps: every Server 2016+
+        # DC vulnerable until then). Server 2025: KB5126646 -> 26100.33650 (KB
+        # support page; the write-up cites 33648, the published build is 33650).
+        # Server 2012/2012 R2 (ESU ended 2026-10-13) are out of the researchers'
+        # tested scope, so no rows. 25398 went EOL 2026-05 at 25398.2330 and never
+        # received the fix -> threshold = last build + 1, permanently vulnerable.
+        (10, 0, 14393, None): 9612,  # Server 2016 (KB5126868, Oct 2026)
+        (10, 0, 17763, None): 9376,  # Server 2019 (KB5126651, Oct 2026)
+        (10, 0, 20348, None): 5761,  # Server 2022 (KB5126655, Oct 2026)
+        (10, 0, 25398, None): 2331,  # Server 23H2: EOL, unpatchable
+        (10, 0, 26100, "srv2025"): 33650,  # Server 2025 (KB5126646)
+    },
+)
+
+_SMB_REAUTH = Cve(
+    cve="SMB-REAUTH",
+    alias="SMB signing re-auth bypass",
+    patch_tuesday="2026-09-08",
+    message="Relay to SMB possible despite enforced signing: re-auth swaps a relayed identity onto a session whose signing key the attacker holds",
+    cwe="CWE-287",
+    exploitation="https://github.com/aas-n/reauthx",
+    msrc="https://blackfield.ch/blog/defeating-enforced-smb-signing/",
+    signing_message="Enforced SMB signing is not effective: cross-user re-authentication retains the original (attacker-known) session key",
+    patches={
+        # Silent same-user re-auth check. Researcher-confirmed Sept 2026 (silent
+        # hardening referenced to KB5124008 by blackfield): 26100 client (9445),
+        # Server 2025 (KB5122871 -> 33438) and Server 2022 (KB5122882 -> 5622,
+        # SpecterOps' fix guidance / lab OS); 25H2 shares the 24H2 train. blackfield
+        # dates the remaining builds "in the weeks after" -> their Oct 2026
+        # cumulative UBRs. 26H2 is an enablement package on the hardened 24H2
+        # train (GA 2026-09-29, post-fix), so its rows mirror the Oct cumulative
+        # (9711); pre-GA Insider builds are out of scope. 25398: EOL,
+        # unpatchable (see LDAP-SWITCHEROO).
+        (10, 0, 14393, None): 9612,  # Server 2016 / Win10 1607 (KB5126868, Oct 2026)
+        (10, 0, 17763, None): 9376,  # Server 2019 (KB5126651, Oct 2026)
+        (10, 0, 19044, None): 7807,  # Win10 21H2 (KB5126657, Oct 2026)
+        (10, 0, 19045, None): 7807,  # Win10 22H2
+        (10, 0, 20348, None): 5622,  # Server 2022 (KB5122882, Sep 2026)
+        (10, 0, 22621, None): 7652,  # Win11 22H2 (KB5126653, Oct 2026)
+        (10, 0, 22631, None): 7652,  # Win11 23H2
+        (10, 0, 25398, None): 2331,  # Server 23H2: EOL, unpatchable
+        (10, 0, 26100, "client"): 9445,  # Win11 24H2 (KB5124008, Sep 2026)
+        (10, 0, 26100, "srv2025"): 33438,  # Server 2025 (KB5122871, Sep 2026)
+        (10, 0, 26200, None): 9445,  # Win11 25H2 (24H2 train)
+        (10, 0, 26300, None): 9711,  # Win11 26H2 (KB5127648; see GA note above)
+        (10, 0, 28000, "x64"): 3231,  # Win11 26H1 (KB5127646, Oct 2026)
+        (10, 0, 28000, "arm"): 3231,  # Win11 26H1 ARM64
+    },
+)
+
 _CVE_2025_54918 = Cve(
     cve="CVE-2025-54918",
     alias="NTLM MIC Bypass",
@@ -451,6 +519,8 @@ _CVE_2026_85884 = Cve(
 CVE_DATABASE: list[Cve] = [
     _CVE_2025_33073,
     _CVE_2025_58726,
+    _LDAP_SWITCHEROO,
+    _SMB_REAUTH,
     _CVE_2025_54918,
     _CVE_2025_53779,
     _CVE_2024_49019,
