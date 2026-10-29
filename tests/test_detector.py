@@ -60,6 +60,7 @@ def test_all_cves_present():
         "CVE-2026-49176",
         "CVE-2026-69451",
         "CVE-2026-85884",
+        "CVE-2026-97798",
     }
 
 
@@ -132,6 +133,15 @@ def test_all_cves_present():
         ("CVE-2026-85884", (10, 0, 28000, "x64"), 3231),  # Win11 26H1 (KB5127646)
         ("CVE-2026-85884", (10, 0, 28000, "arm"), 3231),
         ("CVE-2026-85884", (10, 0, 20348, None), None),  # Server 2022 not affected
+        # Oct 2026 (CVE-2026-97798, WER Faultrep EOP) — clients AND servers
+        ("CVE-2026-97798", (10, 0, 20348, None), 5761),  # Server 2022 (KB5126655 standard)
+        ("CVE-2026-97798", (10, 0, 26100, "client"), 9711),  # Win11 24H2 (KB5127648)
+        ("CVE-2026-97798", (10, 0, 26100, "srv2025"), 33650),  # Server 2025 (KB5126646 standard)
+        ("CVE-2026-97798", (10, 0, 26300, None), 9711),  # Win11 26H2
+        ("CVE-2026-97798", (10, 0, 28000, "x64"), 3231),  # Win11 26H1 (KB5127646)
+        ("CVE-2026-97798", (10, 0, 28000, "arm"), 3231),
+        ("CVE-2026-97798", (10, 0, 25398, None), None),  # 23H2 not affected (MSRC)
+        ("CVE-2026-97798", (10, 0, 14393, None), None),  # Server 2016 not affected (MSRC)
         # Silent relay fixes (no CVE). LDAP-SWITCHEROO: Oct 2026 server cumulatives,
         # DC-only -> 26100 keyed srv2025 and never flags a Win11 24H2 client.
         ("LDAP-SWITCHEROO", (10, 0, 14393, None), 9612),  # Server 2016 (KB5126868)
@@ -258,6 +268,38 @@ def test_85884_not_flagged_on_server_2025():
     v = evaluate(cve, host)
     assert v.vulnerable is None
     assert v.threshold is None
+
+
+# --- CVE-2026-97798 (WER Faultrep EOP, Oct 2026) ---------------------------
+
+
+def test_97798_detected_on_unpatched_server_2022():
+    cve = cvedb.CVE_BY_ID["cve-2026-97798"]
+    host = _host(20348, 5622, os_string="Windows Server 2022")
+    v = evaluate(cve, host)
+    assert v.vulnerable is True  # 5622 < 5761: Sept 2026 cumulative, pre-Oct fix
+    assert v.threshold == 5761
+
+
+def test_97798_patched_at_server_2022_threshold():
+    cve = cvedb.CVE_BY_ID["cve-2026-97798"]
+    host = _host(20348, 5761, os_string="Windows Server 2022")
+    assert evaluate(cve, host).vulnerable is False
+
+
+def test_97798_tier_split_client_vs_server_2025():
+    """Both tiers affected this month with divergent UBR timelines."""
+    cve = cvedb.CVE_BY_ID["cve-2026-97798"]
+    client = _host(26100, 8000, os_string="Windows 11 Pro")
+    v = evaluate(cve, client)
+    assert v.vulnerable is True  # 8000 < 9711
+    assert v.threshold == 9711
+    server = _host(26100, 33650, os_string="Windows Server 2025")
+    assert evaluate(cve, server).vulnerable is False
+    unpatched_server = _host(26100, 33438, os_string="Windows Server 2025")
+    v = evaluate(cve, unpatched_server)
+    assert v.vulnerable is True  # 33438 < 33650 — below the hotpatch-only zone
+    assert v.threshold == 33650
 
 
 # --- Silent relay fixes (LDAP-SWITCHEROO / SMB-REAUTH) --------------------
@@ -471,7 +513,7 @@ def test_26100_disambiguation_makes_the_difference():
 
 def test_select_all():
     selected, unknown = cvedb.select(None)
-    assert len(selected) == 16
+    assert len(selected) == 17
     assert unknown == []
 
 

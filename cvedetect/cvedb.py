@@ -515,6 +515,38 @@ _CVE_2026_85884 = Cve(
     },
 )
 
+# Oct 2026, second entry. Windows Error Reporting (Faultrep TTD data-collection
+# broker) argument injection -> local EoP to SYSTEM. Both clients and servers
+# are affected, so 26100 carries explicit rows for both tiers (timelines
+# diverged: client 9711 vs srv2025 33650).
+_CVE_2026_97798 = Cve(
+    cve="CVE-2026-97798",
+    alias="WER Faultrep EOP",
+    patch_tuesday="2026-10-13",
+    message="Windows Error Reporting Faultrep TTD argument injection -> local EoP to SYSTEM",
+    cwe="CWE-88",
+    exploitation="https://diffract-ai.com/research/cve-2026-97798-faultrep-ttd/",
+    msrc=_c("CVE-2026-97798"),
+    patches={
+        # NVD cpeMatch values; Server 2022 (KB5126655) and Server 2025 (KB5126646)
+        # confirmed against the standard cumulative KB pages — no hotpatch
+        # override applies this month. Client values shared with same-month
+        # CVE-2026-85884 (KB5127648/KB5127646) as required. 22621 (Win11 22H2,
+        # EOL) and 14393/17763 (Server 2016/2019) are absent from MSRC's
+        # affected-product list — deliberate, not missing rows.
+        (10, 0, 19044, None): 7807,  # Win10 21H2 (ESU)
+        (10, 0, 19045, None): 7807,  # Win10 22H2 (ESU)
+        (10, 0, 20348, None): 5761,  # Server 2022 (KB5126655)
+        (10, 0, 22631, None): 7652,  # Win11 23H2
+        (10, 0, 26100, "client"): 9711,  # Win11 24H2 (KB5127648)
+        (10, 0, 26100, "srv2025"): 33650,  # Server 2025 (KB5126646)
+        (10, 0, 26200, None): 9711,  # Win11 25H2 (KB5127648)
+        (10, 0, 26300, None): 9711,  # Win11 26H2 (KB5127648)
+        (10, 0, 28000, "x64"): 3231,  # Win11 26H1 (KB5127646)
+        (10, 0, 28000, "arm"): 3231,
+    },
+)
+
 # Ordered for stable output: network/relay/DC/AD-CS first, then local EoP.
 CVE_DATABASE: list[Cve] = [
     _CVE_2025_33073,
@@ -533,6 +565,7 @@ CVE_DATABASE: list[Cve] = [
     _CVE_2026_49176,
     _CVE_2026_69451,
     _CVE_2026_85884,
+    _CVE_2026_97798,
 ]
 
 CVE_BY_ID: dict[str, Cve] = {c.id.lower(): c for c in CVE_DATABASE}
