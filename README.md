@@ -111,10 +111,10 @@ By default only **vulnerable** CVEs are printed, one line each:
 $ cvedetect checkpoint.htb/alex.turner:'Checkpoint2024!'@checkpoint.htb
 cvedetect — Windows patch-level CVE detection over SMB (heuristic)
 Target  Windows 11 / Server 2025 Build 26100  (10.0.26100.32860)  signing=required DC
-CVE-2026-54121 Certighost                          (UBR 32860 < 33158)
-CVE-2026-42980 WMI integer-underflow -> NT Kernel EoP  (UBR 32860 < 32995)
-CVE-2026-50343 Dark Elevator (InstallService) EoP  (UBR 32860 < 33158)
-CVE-2026-49176 WalletService link-following EoP    (UBR 32860 < 33158)
+CVE-2026-54121 Certighost                          — If host is an AD CS / CA server, it may be vulnerable to Certighost  (UBR 32860 < 33158)
+CVE-2026-42980 WMI integer-underflow -> NT Kernel EoP  — WMI integer underflow -> local EoP to SYSTEM  (UBR 32860 < 32995)
+CVE-2026-50343 Dark Elevator (InstallService) EoP  — InstallService improper link following -> local EoP to SYSTEM  (UBR 32860 < 33158)
+CVE-2026-49176 WalletService link-following EoP    — WalletService improper link following -> local EoP to SYSTEM  (UBR 32860 < 33158)
 ```
 
 `-e/--exploitation` appends the exploitation reference to each line. `--list`
