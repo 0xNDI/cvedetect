@@ -92,6 +92,7 @@ component is present.
 | CVE-2026-49176 | `WalletService` link-following EoP           | 2026-07-14    |
 | CVE-2026-69451 | Fastprox (`fastprox.dll` WMI) EoP            | 2026-09-08    |
 | CVE-2026-85884 | Health Service EOP (Win11 client-only)       | 2026-10-13    |
+| CVE-2026-97798 | WER Faultrep TTD argument-injection EoP      | 2026-10-13    |
 
 The `(10,0,26100)` collision (Win11 24H2 client vs Server 2025) is disambiguated
 from the registry (`CurrentBuildNumber`, `InstallationType`) — unlike `enum_cve`,
