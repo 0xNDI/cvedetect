@@ -75,6 +75,8 @@ component is present.
 |----------------|------------------|-------------------------------------------|
 | CVE-2025-33073 | NTLM reflection  | signing-aware message                     |
 | CVE-2025-58726 | Ghost SPN        | signing-aware message                     |
+| LDAP-SWITCHEROO| LDAP Switcheroo  | DC-only; no CVE — silent Oct-2026 fix     |
+| SMB-REAUTH     | SMB signing re-auth bypass | no CVE — silent Sep-2026 fix     |
 | CVE-2025-54918 | NTLM MIC Bypass  | DC-only                                   |
 | CVE-2025-53779 | BadSuccessor     | DC-only                                   |
 | CVE-2024-49019 | ESC15 / EKUwu    | AD-CS                                     |
