@@ -57,8 +57,8 @@ def print_verdicts(
     for v in vuln:
         line = f"[bold red]{v.cve.id:<14}[/] [bold]{v.cve.alias}[/]"
         # Relay-style CVEs change meaning under mandatory SMB signing.
-        if host.signing_required and v.cve.signing_message:
-            line += f"  [yellow]— {v.cve.signing_message}[/]"
+        desc = v.cve.signing_message if (host.signing_required and v.cve.signing_message) else v.cve.message
+        line += f"  — {desc}"
         line += f"  [dim](UBR {v.host_ubr} < {v.threshold})[/]"
         if show_exploitation:
             line += f"  [blue underline]{v.cve.exploitation}[/]"
